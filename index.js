@@ -14,12 +14,7 @@ const {
   Events
 } = require("discord.js");
 
-const Groq = require("groq-sdk");
 const fs = require("fs");
-
-// ==============================
-// CLIENT
-// ==============================
 
 const client = new Client({
   intents: [
@@ -31,16 +26,17 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-});
+// =========================
+// CONFIG
+// =========================
 
 const OWNER_ID = process.env.OWNER_ID;
-const DB_FILE = "./keys.json";
 
-// ==============================
+// =========================
 // DATABASE
-// ==============================
+// =========================
+
+const DB_FILE = "./keys.json";
 
 let db = {
   keys: {},
@@ -50,69 +46,36 @@ let db = {
 if (fs.existsSync(DB_FILE)) {
   try {
     db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-
-    if (!db.keys) db.keys = {};
-    if (!db.users) db.users = {};
   } catch {
-    console.log("Database error. Creating new database.");
+    console.log("Database was invalid. Creating a new one.");
   }
 }
 
 function saveDB() {
-  fs.writeFileSync(
-    DB_FILE,
-    JSON.stringify(db, null, 2)
-  );
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
 
-// ==============================
+// =========================
 // KEY GENERATOR
-// ==============================
+// =========================
 
 function generateKey() {
-  const characters =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
   let key = "";
 
   for (let i = 0; i < 16; i++) {
-    key += characters[
-      Math.floor(Math.random() * characters.length)
-    ];
+    key += chars[Math.floor(Math.random() * chars.length)];
   }
 
   return key;
 }
 
-function createKey(duration) {
-  let key;
-
-  do {
-    key = generateKey();
-  } while (db.keys[key]);
-
-  db.keys[key] = {
-    duration: duration,
-    createdAt: Date.now(),
-
-    used: false,
-    usedBy: null,
-    usedUsername: null,
-    redeemedAt: null
-  };
-
-  saveDB();
-
-  return key;
-}
-
-// ==============================
-// ACCESS CHECK
-// ==============================
+// =========================
+// ACCESS
+// =========================
 
 function hasAccess(userId) {
-
-  // Owner is permanent.
   if (userId === OWNER_ID) {
     return true;
   }
@@ -124,23 +87,15 @@ function hasAccess(userId) {
   }
 
   if (Date.now() >= user.expiresAt) {
-
     delete db.users[userId];
-
     saveDB();
-
     return false;
   }
 
   return true;
 }
 
-// ==============================
-// TIME LEFT
-// ==============================
-
 function getTimeLeft(userId) {
-
   if (userId === OWNER_ID) {
     return "♾️ Permanent";
   }
@@ -151,107 +106,83 @@ function getTimeLeft(userId) {
     return null;
   }
 
-  const remaining =
-    user.expiresAt - Date.now();
+  const remaining = user.expiresAt - Date.now();
 
   if (remaining <= 0) {
-
     delete db.users[userId];
-
     saveDB();
-
     return null;
   }
 
-  const days =
-    Math.floor(remaining / 86400000);
-
-  const hours =
-    Math.floor(
-      (remaining % 86400000) / 3600000
-    );
-
-  const minutes =
-    Math.floor(
-      (remaining % 3600000) / 60000
-    );
+  const days = Math.floor(remaining / 86400000);
+  const hours = Math.floor(
+    (remaining % 86400000) / 3600000
+  );
+  const minutes = Math.floor(
+    (remaining % 3600000) / 60000
+  );
 
   return `${days}d ${hours}h ${minutes}m`;
 }
 
-// ==============================
+// =========================
 // DURATION PARSER
-// ==============================
+// =========================
 
 function parseDuration(text) {
-
   text = text.toLowerCase();
 
-  // "a week"
+  // days
+  let match = text.match(/(\d+)\s*(day|days|d)\b/);
+
+  if (match) {
+    return Number(match[1]) * 24 * 60 * 60 * 1000;
+  }
+
+  // weeks
+  match = text.match(/(\d+)\s*(week|weeks|wk|w)\b/);
+
+  if (match) {
+    return Number(match[1]) * 7 * 24 * 60 * 60 * 1000;
+  }
+
+  // months
+  match = text.match(/(\d+)\s*(month|months|mo)\b/);
+
+  if (match) {
+    return Number(match[1]) * 30 * 24 * 60 * 60 * 1000;
+  }
+
+  // hours
+  match = text.match(/(\d+)\s*(hour|hours|hr|hrs|h)\b/);
+
+  if (match) {
+    return Number(match[1]) * 60 * 60 * 1000;
+  }
+
+  // one week / a week
   if (
     text.includes("a week") ||
     text.includes("one week")
   ) {
-    return 7 * 86400000;
+    return 7 * 24 * 60 * 60 * 1000;
   }
 
-  // "a day"
+  // one day / a day
   if (
     text.includes("a day") ||
     text.includes("one day")
   ) {
-    return 86400000;
-  }
-
-  // days
-  let match = text.match(
-    /(\d+)\s*(day|days|d)\b/
-  );
-
-  if (match) {
-    return Number(match[1]) * 86400000;
-  }
-
-  // weeks
-  match = text.match(
-    /(\d+)\s*(week|weeks|wk|w)\b/
-  );
-
-  if (match) {
-    return Number(match[1]) *
-      7 *
-      86400000;
-  }
-
-  // months
-  match = text.match(
-    /(\d+)\s*(month|months|mo)\b/
-  );
-
-  if (match) {
-    return Number(match[1]) *
-      30 *
-      86400000;
-  }
-
-  // hours
-  match = text.match(
-    /(\d+)\s*(hour|hours|hr|hrs|h)\b/
-  );
-
-  if (match) {
-    return Number(match[1]) *
-      3600000;
+    return 24 * 60 * 60 * 1000;
   }
 
   return null;
 }
 
 function durationName(ms) {
-
   const days = ms / 86400000;
 
-  if (Number.isInteger(days)) {
+  if (days >= 1 && Number.isInteger(days)) {
     return `${days} day${days === 1 ? "" : "s"}`;
   }
 
@@ -264,16 +195,39 @@ function durationName(ms) {
   return "custom duration";
 }
 
-// ==============================
+// =========================
+// KEY CREATION
+// =========================
+
+function createKey(duration) {
+  let key;
+
+  do {
+    key = generateKey();
+  } while (db.keys[key]);
+
+  db.keys[key] = {
+    duration,
+    createdAt: Date.now(),
+    used: false,
+    usedBy: null,
+    redeemedAt: null
+  };
+
+  saveDB();
+
+  return key;
+}
+
+// =========================
 // KEYSYSTEM PANEL
-// ==============================
+// =========================
 
 async function sendKeySystem(channel) {
-
   const embed = new EmbedBuilder()
     .setTitle("🔐 Access Key System")
     .setDescription(
-      "You need a valid access key to use this bot.\n\n" +
+      "Redeem a valid access key to unlock the bot.\n\n" +
       "🔑 Each key can only be used once.\n" +
       "⏳ Access expires when your timer ends."
     );
@@ -284,9 +238,7 @@ async function sendKeySystem(channel) {
     .setEmoji("🔑")
     .setStyle(ButtonStyle.Primary);
 
-  const row =
-    new ActionRowBuilder()
-      .addComponents(button);
+  const row = new ActionRowBuilder().addComponents(button);
 
   await channel.send({
     embeds: [embed],
@@ -294,487 +246,248 @@ async function sendKeySystem(channel) {
   });
 }
 
-// ==============================
-// GROQ AI
-// ==============================
+// =========================
+// READY
+// =========================
 
-async function understandRequest(text) {
+client.once(Events.ClientReady, () => {
+  console.log(`Logged in as ${client.user.tag}`);
+});
 
-  try {
+// =========================
+// BUTTON
+// =========================
 
-    const completion =
-      await groq.chat.completions.create({
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isButton()) return;
 
-        model: "openai/gpt-oss-20b",
+  if (interaction.customId !== "redeem_access") return;
 
-        temperature: 0,
+  const modal = new ModalBuilder()
+    .setCustomId("redeem_modal")
+    .setTitle("Redeem Access Key");
 
-        messages: [
+  const input = new TextInputBuilder()
+    .setCustomId("access_key")
+    .setLabel("Enter your 16-character key")
+    .setPlaceholder("XXXXXXXXXXXXXXXX")
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(16)
+    .setMaxLength(16)
+    .setRequired(true);
 
-          {
-            role: "system",
+  const row = new ActionRowBuilder().addComponents(input);
 
-            content: `
-You are the natural-language command interpreter
-for a Discord access-key bot.
+  modal.addComponents(row);
 
-You ONLY interpret what the user wants.
+  await interaction.showModal(modal);
+});
 
-Return ONLY valid JSON.
+// =========================
+// REDEEM
+// =========================
 
-Possible actions:
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isModalSubmit()) return;
 
-generate_key
-keysystem
-timeleft
-unknown
+  if (interaction.customId !== "redeem_modal") return;
 
-For generate_key:
+  const key = interaction.fields
+    .getTextInputValue("access_key")
+    .trim()
+    .toUpperCase();
 
-{
-  "action": "generate_key",
-  "durationText": "requested duration"
-}
+  const data = db.keys[key];
 
-For keysystem:
-
-{
-  "action": "keysystem"
-}
-
-For timeleft:
-
-{
-  "action": "timeleft"
-}
-
-For unknown:
-
-{
-  "action": "unknown"
-}
-
-Examples:
-
-"gen me a week access key"
-=> generate_key, durationText "a week"
-
-"make me a 15 day key"
-=> generate_key, durationText "15 days"
-
-"I need a key for 2 weeks"
-=> generate_key, durationText "2 weeks"
-
-"open the access keysystem"
-=> keysystem
-
-"show the key system"
-=> keysystem
-
-"how much time do I have"
-=> timeleft
-
-NEVER generate keys yourself.
-
-NEVER grant access yourself.
-
-NEVER change owner permissions.
-
-NEVER output anything except JSON.
-`
-          },
-
-          {
-            role: "user",
-            content: text
-          }
-
-        ]
-      });
-
-    const output =
-      completion.choices?.[0]?.message?.content
-      || "";
-
-    try {
-
-      return JSON.parse(output);
-
-    } catch {
-
-      // Sometimes models put JSON in a code block.
-      const match =
-        output.match(/\{[\s\S]*\}/);
-
-      if (match) {
-        return JSON.parse(match[0]);
-      }
-
-      return {
-        action: "unknown"
-      };
-    }
-
-  } catch (error) {
-
-    console.error(
-      "Groq error:",
-      error.message
-    );
-
-    return {
-      action: "error"
-    };
-  }
-}
-
-// ==============================
-// REDEEM BUTTON
-// ==============================
-
-client.on(
-  Events.InteractionCreate,
-  async interaction => {
-
-    if (!interaction.isButton()) return;
-
-    if (
-      interaction.customId !==
-      "redeem_access"
-    ) {
-      return;
-    }
-
-    const modal =
-      new ModalBuilder()
-        .setCustomId("redeem_modal")
-        .setTitle("Redeem Access Key");
-
-    const input =
-      new TextInputBuilder()
-        .setCustomId("access_key")
-        .setLabel("Enter your 16-character key")
-        .setPlaceholder("XXXXXXXXXXXXXXXX")
-        .setStyle(TextInputStyle.Short)
-        .setMinLength(16)
-        .setMaxLength(16)
-        .setRequired(true);
-
-    const row =
-      new ActionRowBuilder()
-        .addComponents(input);
-
-    modal.addComponents(row);
-
-    await interaction.showModal(modal);
-  }
-);
-
-// ==============================
-// REDEEM KEY
-// ==============================
-
-client.on(
-  Events.InteractionCreate,
-  async interaction => {
-
-    if (!interaction.isModalSubmit()) {
-      return;
-    }
-
-    if (
-      interaction.customId !==
-      "redeem_modal"
-    ) {
-      return;
-    }
-
-    const key =
-      interaction.fields
-        .getTextInputValue("access_key")
-        .trim()
-        .toUpperCase();
-
-    const keyData =
-      db.keys[key];
-
-    // Invalid key
-    if (!keyData) {
-
-      return interaction.reply({
-        content:
-          "❌ Invalid access key.",
-        ephemeral: true
-      });
-    }
-
-    // Already used
-    if (keyData.used) {
-
-      return interaction.reply({
-        content:
-          "❌ This key has already been used.",
-        ephemeral: true
-      });
-    }
-
-    // Already has access
-    if (
-      hasAccess(interaction.user.id)
-    ) {
-
-      return interaction.reply({
-        content:
-          "⚠️ You already have active access.",
-        ephemeral: true
-      });
-    }
-
-    // Mark key as used
-    keyData.used = true;
-    keyData.usedBy =
-      interaction.user.id;
-
-    keyData.usedUsername =
-      interaction.user.username;
-
-    keyData.redeemedAt =
-      Date.now();
-
-    // Give access
-    db.users[interaction.user.id] = {
-
-      key: key,
-
-      username:
-        interaction.user.username,
-
-      redeemedAt:
-        Date.now(),
-
-      expiresAt:
-        Date.now() +
-        keyData.duration
-    };
-
-    saveDB();
-
-    await interaction.reply({
-
-      content:
-        `✅ **Access Granted!**\n\n` +
-        `👤 **User:** ${interaction.user.username}\n` +
-        `⏳ **Duration:** ${durationName(keyData.duration)}\n` +
-        `🔑 **Key:** \`${key}\`\n\n` +
-        `Your access is now active.`,
-
+  if (!data) {
+    return interaction.reply({
+      content: "❌ Invalid access key.",
       ephemeral: true
     });
   }
-);
 
-// ==============================
-// NATURAL LANGUAGE MESSAGES
-// ==============================
+  if (data.used) {
+    return interaction.reply({
+      content: "❌ This key has already been used.",
+      ephemeral: true
+    });
+  }
 
-client.on(
-  Events.MessageCreate,
-  async message => {
+  // Prevent stacking another active key.
+  if (hasAccess(interaction.user.id)) {
+    return interaction.reply({
+      content: "⚠️ You already have active access.",
+      ephemeral: true
+    });
+  }
 
-    if (message.author.bot) {
-      return;
-    }
+  data.used = true;
+  data.usedBy = interaction.user.id;
+  data.redeemedAt = Date.now();
 
-    // Only process messages mentioning bot.
+  db.users[interaction.user.id] = {
+    key,
+    redeemedAt: Date.now(),
+    expiresAt: Date.now() + data.duration
+  };
+
+  saveDB();
+
+  await interaction.reply({
+    content:
+      `✅ **Access granted!**\n\n` +
+      `🔑 Key: \`${key}\`\n` +
+      `⏳ Duration: **${durationName(data.duration)}**\n` +
+      `👤 Account: **${interaction.user.username}**`,
+    ephemeral: true
+  });
+});
+
+// =========================
+// MESSAGE / AI-LIKE COMMANDS
+// =========================
+
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot) return;
+
+  // Only react when the bot is mentioned.
+  if (!message.mentions.users.has(client.user.id)) return;
+
+  const text = message.content
+    .replace(`<@${client.user.id}>`, "")
+    .replace(`<@!${client.user.id}>`, "")
+    .trim()
+    .toLowerCase();
+
+  // =======================
+  // OWNER NATURAL LANGUAGE
+  // =======================
+
+  if (message.author.id === OWNER_ID) {
+
+    // Generate key request
     if (
-      !message.mentions.users.has(
-        client.user.id
-      )
+      text.includes("generate") ||
+      text.includes("gen") ||
+      text.includes("make")
     ) {
-      return;
-    }
+      const duration = parseDuration(text);
 
-    const text =
-      message.content
-        .replace(
-          new RegExp(
-            `<@!?${client.user.id}>`,
-            "g"
-          ),
-          ""
-        )
-        .trim();
-
-    if (!text) {
-      return;
-    }
-
-    // ==========================
-    // OWNER
-    // ==========================
-
-    if (
-      message.author.id === OWNER_ID
-    ) {
-
-      const result =
-        await understandRequest(text);
-
-      // AI error
-      if (result.action === "error") {
-
+      if (!duration) {
         return message.reply(
-          "⚠️ AI service is temporarily unavailable."
+          "❌ Tell me the duration, e.g. `@Bot gen me a week access key`."
         );
       }
 
-      // Generate key
-      if (
-        result.action ===
-        "generate_key"
-      ) {
+      const key = createKey(duration);
 
-        const duration =
-          parseDuration(
-            result.durationText ||
-            text
-          );
+      // Private-style channel response.
+      // Discord normal messages cannot be truly ephemeral,
+      // so we delete the trigger and response shortly afterward.
+      const reply = await message.reply({
+        content:
+          `🔑 **Access Key Generated**\n\n` +
+          `\`${key}\`\n\n` +
+          `⏳ Duration: **${durationName(duration)}**\n` +
+          `✅ Added to the access key system.`
+      });
 
-        if (!duration) {
-
-          return message.reply(
-            "❌ I couldn't understand the duration. Try `@Bot generate me a 15 day access key`."
-          );
-        }
-
-        const key =
-          createKey(duration);
-
-        // DM owner
-        try {
-
-          await message.author.send(
-
-            `🔐 **ACCESS KEY GENERATED**\n\n` +
-
-            `🔑 Key: \`${key}\`\n` +
-
+      // Send the key to owner's DM.
+      try {
+        await message.author.send(
+          `🔐 **Your Access Key**\n\n` +
+          `\`${key}\`\n\n` +
+          `⏳ Duration: **${durationName(duration)}**\n` +
+          `⚠️ This key can only be redeemed once.`
+        );
+      } catch {
+        await reply.edit({
+          content:
+            `🔑 **Access Key Generated**\n\n` +
+            `\`${key}\`\n\n` +
             `⏳ Duration: **${durationName(duration)}**\n` +
-
-            `🟢 Status: **Unused**\n\n` +
-
-            `⚠️ This key can only be redeemed once.`
-          );
-
-        } catch {
-
-          return message.reply(
-            "❌ Key was generated, but I couldn't DM you. Enable DMs from this server."
-          );
-        }
-
-        // Temporary confirmation
-        const reply =
-          await message.reply(
-            `✅ Key generated and sent to your DMs.\n⏳ ${durationName(duration)}`
-          );
-
-        // Delete confirmation
-        // so the key itself isn't left
-        // visible in the channel.
-        setTimeout(() => {
-
-          reply.delete()
-            .catch(() => {});
-
-        }, 5000);
-
-        return;
+            `⚠️ I couldn't DM you. Please enable DMs from this server.`
+        });
       }
 
-      // Key system
-      if (
-        result.action ===
-        "keysystem"
-      ) {
+      // Remove the public-looking message after a short time.
+      setTimeout(() => {
+        reply.delete().catch(() => {});
+      }, 5000);
 
-        return sendKeySystem(
-          message.channel
-        );
-      }
-
-      // Time left
-      if (
-        result.action ===
-        "timeleft"
-      ) {
-
-        return message.reply(
-          `⏳ Your access: **${getTimeLeft(message.author.id)}**`
-        );
-      }
+      return;
     }
 
-    // ==========================
-    // NON-OWNER
-    // ==========================
-
-    const lower =
-      text.toLowerCase();
-
-    // Let everyone open keysystem.
+    // Keysystem
     if (
-      lower.includes("keysystem") ||
-      lower.includes("key system") ||
-      lower.includes("redeem")
+      text.includes("keysystem") ||
+      text.includes("key system") ||
+      text.includes("access keysystem")
     ) {
-
-      return sendKeySystem(
-        message.channel
-      );
+      await sendKeySystem(message.channel);
+      return;
     }
+  }
 
-    // Protected bot
-    if (
-      !hasAccess(
-        message.author.id
-      )
-    ) {
+  // =======================
+  // EVERYONE ELSE
+  // =======================
 
-      return message.reply(
-        "🔒 **Access denied.** Redeem a valid access key first."
-      );
-    }
+  if (
+    text.includes("keysystem") ||
+    text.includes("key system")
+  ) {
+    await sendKeySystem(message.channel);
+    return;
+  }
 
-    // ==========================
-    // YOUR PROTECTED AI/BOT
-    // ==========================
+  // =======================
+  // ACCESS CHECK
+  // =======================
 
-    await message.reply(
-      "✅ You have active access. Your request was received."
+  if (!hasAccess(message.author.id)) {
+    return message.reply(
+      "🔒 **Access denied.** Redeem a valid access key first."
     );
   }
-);
 
-// ==============================
+  // Your protected bot features go here.
+
+  await message.reply(
+    "✅ You have active access. Your request was received."
+  );
+});
+
+// =========================
+// SLASH-LIKE COMMANDS
+// =========================
+
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "timeleft") {
+
+    if (!hasAccess(interaction.user.id)) {
+      return interaction.reply({
+        content: "🔒 You don't have active access.",
+        ephemeral: true
+      });
+    }
+
+    return interaction.reply({
+      content:
+        `⏳ **Access remaining:** ${getTimeLeft(interaction.user.id)}`,
+      ephemeral: true
+    });
+  }
+
+  if (interaction.commandName === "keysystem") {
+    return sendKeySystem(interaction.channel);
+  }
+});
+
+// =========================
 // LOGIN
-// ==============================
+// =========================
 
-client.once(
-  Events.ClientReady,
-  () => {
-
-    console.log(
-      `✅ Logged in as ${client.user.tag}`
-    );
-
-    console.log(
-      `👑 Owner ID: ${OWNER_ID}`
-    );
-
-  }
-);
-
-client.login(
-  process.env.DISCORD_TOKEN
-);
+client.login(process.env.DISCORD_TOKEN);
