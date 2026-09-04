@@ -3,3 +3,5 @@ dw key will be automatically-added into keysystem
 Cmd: @Bot access keysystem
 Cmd: @Bot can I use this key?
 The bot checks the database and tells them whether the key is valid.
+Cmd: @Bot gen me a week @bot access key
+week: the time you wanna put how long key expire, until the person can't access the bot anymore! 
