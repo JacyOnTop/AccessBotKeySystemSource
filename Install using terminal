@@ -1,2 +1,4 @@
 npm init -y
-npm install discord.js groq-sdk dotenv
+npm install discord.js dotenv
+node index.js
+(if all three3 run/install into terminal, bot doesn't work then install/run first two2 into the terminal before running/installing "node.js" in terminal! 
