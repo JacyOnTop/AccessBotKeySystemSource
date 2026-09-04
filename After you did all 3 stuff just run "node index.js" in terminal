@@ -1,11 +1,5 @@
-after doing everything (all 3,index.js,.env and installed the groqvloud AI) then run node.js this is cmd u use
-cmd: @Bot gen me a week @bot access key
-bot will say
-🔐 ACCESS KEY GENERATED
-
-Key: X7KQ2M9AB4PZ8T6C
-Duration: 7 days
-Status: Unused
-in your dms
-cmd: @Bot access keysystem
-gen key cmd adds the key into the keysystem dw
+Cmd: @Bot gen me a [time] access key
+dw key will be automatically-added into keysystem
+Cmd: @Bot access keysystem
+Cmd: @Bot can I use this key?
+The bot checks the database and tells them whether the key is valid.
